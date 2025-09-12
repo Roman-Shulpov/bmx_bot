@@ -1,7 +1,8 @@
 # bmx_bot.py
 import logging
-import asyncio
+from fastapi import FastAPI, Request
 from aiogram import Bot, Dispatcher, types
+from aiogram.types import Update
 
 TOKEN = "7976564635:AAGr4yMj4jDk5Lu6wam9JOfvkSrwHw0eYzg"
 VIDEO_THREAD_ID = 4
@@ -13,7 +14,9 @@ logger = logging.getLogger(__name__)
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# Проверка изображений
+app = FastAPI()
+
+# --- Проверка содержимого сообщений ---
 def message_contains_image(msg: types.Message) -> bool:
     if msg.photo:
         return True
@@ -21,7 +24,6 @@ def message_contains_image(msg: types.Message) -> bool:
         return True
     return False
 
-# Проверка видео
 def message_contains_video(msg: types.Message) -> bool:
     if msg.video or msg.video_note or msg.animation:
         return True
@@ -29,7 +31,7 @@ def message_contains_video(msg: types.Message) -> bool:
         return True
     return False
 
-# Фильтрация по топикам
+# --- Фильтрация сообщений ---
 @dp.message()
 async def filter_by_thread(message: types.Message):
     thread_id = message.message_thread_id
@@ -43,18 +45,21 @@ async def filter_by_thread(message: types.Message):
     except Exception as e:
         logger.exception("Ошибка при обработке сообщения: %s", e)
 
-# Эхо-хендлер
-@dp.message()
-async def echo(message: types.Message):
-    if message.text:
-        await message.answer(message.text)
+# --- Webhook endpoint ---
+@app.post(f"/webhook/{TOKEN}")
+async def telegram_webhook(req: Request):
+    data = await req.json()
+    update = Update(**data)
+    await dp.process_update(update)
+    return {"ok": True}
 
-# Запуск long-polling
-async def main():
-    try:
-        await dp.start_polling(bot)
-    finally:
-        await bot.session.close()
+# --- Установка Webhook при старте ---
+@app.on_event("startup")
+async def on_startup():
+    webhook_url = f"https://bmx-bot-hual.onrender.com/webhook/{TOKEN}"
+    await bot.set_webhook(webhook_url)
+    logger.info(f"Webhook установлен: {webhook_url}")
 
-if __name__ == "__main__":
-    asyncio.run(main())
+@app.on_event("shutdown")
+async def on_shutdown():
+    await bot.delete_webhook()
