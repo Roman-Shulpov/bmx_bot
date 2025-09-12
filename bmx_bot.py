@@ -22,46 +22,37 @@
 
 # ========================РАБОТАЕТ ВРОДЕ НО НЕ ТАК===========================================
 import os
-import logging
-from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
 from fastapi import FastAPI, Request
+from aiogram import Bot, Dispatcher, types
 from aiogram.types import Update
-from handlers import video_photo  # твой обработчик сообщений
+from aiogram.utils.exceptions import TelegramAPIError
+from handlers.video_photo import check_message
 
-logging.basicConfig(level=logging.INFO)
-
-# Получение токена из Environment Variables
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN не задан! Проверь переменные окружения.")
 
+WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"
+WEBHOOK_URL = f"{os.getenv('BASE_URL')}{WEBHOOK_PATH}"
+
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
-
-# Подключаем хэндлеры
-video_photo.register_handlers(dp)
-
 app = FastAPI()
 
-WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"
-WEBHOOK_URL = f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}{WEBHOOK_PATH}"
-
-# Endpoint для Telegram webhook
-@app.post(WEBHOOK_PATH)
-async def telegram_webhook(request: Request):
-    update = Update(**await request.json())
-    await dp.process_update(update)
-    return {"ok": True}
-
-# Для проверки, что сервер жив
+# Корневой эндпоинт для проверки
 @app.get("/")
 async def root():
     return {"status": "Bot is running!"}
 
-# Если хочешь запускать через uvicorn локально:
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("bmx_bot:app", host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
+# Webhook endpoint
+@app.post(WEBHOOK_PATH)
+async def telegram_webhook(update: Request):
+    data = await update.json()
+    update_obj = Update(**data)
+    try:
+        await check_message(bot, update_obj)
+    except TelegramAPIError:
+        pass
+    return {"ok": True}
 
-
+# Запуск вебхука через set_webhook.py
