@@ -18,21 +18,21 @@
 
 # ========================РАБОТАЕТ ВРОДЕ НО НЕ ТАК===========================================
 import os
-import asyncio
 from aiogram import Bot
+import asyncio
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-BASE_URL = os.getenv("BASE_URL")  # например, https://bmx-bot-hual.onrender.com
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # Пример: https://bmx-bot-hual.onrender.com/webhook/{BOT_TOKEN}
 
-if not BOT_TOKEN or not BASE_URL:
-    raise RuntimeError("BOT_TOKEN или BASE_URL не заданы!")
+if not BOT_TOKEN or not WEBHOOK_URL:
+    raise RuntimeError("BOT_TOKEN или WEBHOOK_URL не задан!")
 
-WEBHOOK_URL = f"{BASE_URL}/webhook/{BOT_TOKEN}"
+bot = Bot(token=BOT_TOKEN)
 
 async def main():
-    bot = Bot(token=BOT_TOKEN)
-    await bot.delete_webhook()
+    await bot.delete_webhook(drop_pending_updates=True)
     await bot.set_webhook(WEBHOOK_URL)
-    await bot.session.close()
+    print("Webhook установлен!")
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
