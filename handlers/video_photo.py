@@ -26,33 +26,23 @@
 #                     pass
 #                 return
 # ========================РАБОТАЕТ ВРОДЕ НО НЕ ТАК===========================================
+from aiogram import Bot, types
 
+async def check_message(bot: Bot, update: types.Update):
+    message = update.message
+    if not message:
+        return
 
-from aiogram import types, Dispatcher
+    # Если видео раздел
+    if message.video or message.document and message.document.mime_type.startswith("video"):
+        return
+    # Если фото раздел
+    if message.photo:
+        return
 
-def register_handlers(dp: Dispatcher, bot, VIDEO_THREAD_ID, PHOTO_THREAD_ID):
+    # Удаляем пустое сообщение
+    try:
+        await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
+    except Exception:
+        pass
 
-    @dp.message_handler(content_types=types.ContentType.VIDEO)
-    async def handle_video(message: types.Message):
-        if message.chat.id != VIDEO_THREAD_ID:
-            return
-        # Видео есть — ничего не удаляем
-        # Если нужен доп. функционал, добавь здесь
-
-    @dp.message_handler(content_types=types.ContentType.PHOTO)
-    async def handle_photo(message: types.Message):
-        if message.chat.id != PHOTO_THREAD_ID:
-            return
-        # Фото есть — ничего не удаляем
-
-    # Удаляем пустые сообщения в видео-топике
-    @dp.message_handler(lambda m: m.chat.id == VIDEO_THREAD_ID)
-    async def delete_empty_video(message: types.Message):
-        if not message.video:
-            await message.delete()
-
-    # Удаляем пустые сообщения в фото-топике
-    @dp.message_handler(lambda m: m.chat.id == PHOTO_THREAD_ID)
-    async def delete_empty_photo(message: types.Message):
-        if not message.photo:
-            await message.delete()
