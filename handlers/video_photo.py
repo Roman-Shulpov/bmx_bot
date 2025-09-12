@@ -26,23 +26,24 @@
 #                     pass
 #                 return
 # ========================РАБОТАЕТ ВРОДЕ НО НЕ ТАК===========================================
-from aiogram import Bot, types
+from aiogram.types import Message
+from aiogram import Bot
+import os
 
-async def check_message(bot: Bot, update: types.Update):
-    message = update.message
-    if not message:
+CHAT_IDS = [
+    int(os.getenv("CHAT_ID_1")),
+    int(os.getenv("CHAT_ID_2"))
+]
+
+async def check_and_delete_message(bot: Bot, message: Message):
+    if message.chat.id not in CHAT_IDS:
         return
 
-    # Если видео раздел
-    if message.video or message.document and message.document.mime_type.startswith("video"):
-        return
-    # Если фото раздел
-    if message.photo:
-        return
+    has_photo = bool(message.photo)
+    has_video = bool(message.video or (message.document and message.document.mime_type.startswith("video")))
 
-    # Удаляем пустое сообщение
-    try:
-        await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
-    except Exception:
-        pass
-
+    if not (has_photo or has_video):
+        try:
+            await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
+        except Exception:
+            pass
