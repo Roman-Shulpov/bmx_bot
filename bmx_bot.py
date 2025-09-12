@@ -1,50 +1,46 @@
 import os
 import asyncio
+from fastapi import FastAPI
 from aiogram import Bot, Dispatcher, types
-from aiogram.types import ContentType
+from aiogram.types import Message
 from aiogram.filters import Filter
+from aiogram.dispatcher.webhook import get_new_configured_app
 
-# Получаем переменные из Environment Variables
+# Получаем переменные окружения
 TOKEN = os.getenv("TOKEN")
-VIDEO_THREAD_ID = int(os.getenv("VIDEO_THREAD_ID"))  # топик для видео
-PHOTO_THREAD_ID = int(os.getenv("PHOTO_THREAD_ID"))  # топик для фото
+VIDEO_THREAD_ID = int(os.getenv("VIDEO_THREAD_ID"))
+PHOTO_THREAD_ID = int(os.getenv("PHOTO_THREAD_ID"))
 
 bot = Bot(token=TOKEN, parse_mode="HTML")
 dp = Dispatcher()
 
-# Фильтр для сообщений без видео в видео-топике
+# Фильтры
 class NoVideoFilter(Filter):
-    async def __call__(self, message: types.Message) -> bool:
+    async def __call__(self, message: Message) -> bool:
         return message.chat.id == VIDEO_THREAD_ID and not message.video
 
-# Фильтр для сообщений без фото в фото-топике
 class NoPhotoFilter(Filter):
-    async def __call__(self, message: types.Message) -> bool:
+    async def __call__(self, message: Message) -> bool:
         return message.chat.id == PHOTO_THREAD_ID and not message.photo
 
-# Хэндлер для удаления сообщений без видео
+# Хэндлеры
 @dp.message(NoVideoFilter())
-async def delete_no_video(message: types.Message):
+async def delete_no_video(message: Message):
     try:
         await message.delete()
     except Exception as e:
-        print(f"Ошибка при удалении сообщения: {e}")
+        print(f"Error deleting message without video: {e}")
 
-# Хэндлер для удаления сообщений без фото
 @dp.message(NoPhotoFilter())
-async def delete_no_photo(message: types.Message):
+async def delete_no_photo(message: Message):
     try:
         await message.delete()
     except Exception as e:
-        print(f"Ошибка при удалении сообщения: {e}")
+        print(f"Error deleting message without photo: {e}")
 
-# Запуск бота
-async def main():
-    try:
-        print("Бот запущен...")
-        await dp.start_polling(bot)
-    finally:
-        await bot.session.close()
+# Создаем ASGI app для Render
+app = get_new_configured_app(dispatcher=dp, path="/webhook")
 
+# Запуск polling локально для теста
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(dp.start_polling(bot))
