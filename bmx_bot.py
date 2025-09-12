@@ -22,40 +22,37 @@
 
 # ========================РАБОТАЕТ ВРОДЕ НО НЕ ТАК===========================================
 import os
-from aiogram import Bot, Dispatcher, types
 from fastapi import FastAPI, Request
-from aiogram.types import Update
-from aiogram.dispatcher.webhook import get_new_configured_app
-from handlers.video_photo import check_and_delete_message
+from aiogram import Bot, Dispatcher, types
+from aiogram.fsm.storage.memory import MemoryStorage
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN не задан! Проверь переменные окружения.")
+from handlers.video_photo import register_handlers
 
-bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher()
+TOKEN = os.getenv("BOT_TOKEN")
+bot = Bot(token=TOKEN)
+dp = Dispatcher(storage=MemoryStorage())
+
+# Регистрируем хэндлеры
+register_handlers(dp)
 
 app = FastAPI()
 
-# --- Обработчик любых сообщений ---
-@dp.message()
-async def handle_message(message: types.Message):
-    await check_and_delete_message(bot, message)
 
-# --- Webhook endpoint ---
-@app.post("/webhook/{token}")
-async def webhook_handler(token: str, request: Request):
-    if token != BOT_TOKEN:
-        return {"status": "unauthorized"}
-
-    data = await request.json()
-    update = Update(**data)
-    await dp.update_queue.put(update)
-    return {"status": "ok"}
-
-# --- Для локального теста ---
-@app.get("/")
-async def index():
-    return {"status": "Bot is running"}
+# FastAPI webhook handler
+@app.post("/webhook")
+async def webhook_handler(request: Request):
+    update = types.Update.model_validate(await request.json(), context={"bot": bot})
+    await dp.feed_update(bot, update)
+    return {"ok": True}
 
 
+@app.on_event("startup")
+async def on_startup():
+    webhook_url = os.getenv("RENDER_EXTERNAL_URL") + "/webhook"
+    await bot.set_webhook(webhook_url)
+
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    await bot.delete_webhook()
+    await bot.session.close()
