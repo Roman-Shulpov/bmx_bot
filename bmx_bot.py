@@ -21,34 +21,47 @@
 #     return {"ok": True}
 
 # ========================РАБОТАЕТ ВРОДЕ НО НЕ ТАК===========================================
-
 import os
-from fastapi import FastAPI, Request
+import logging
 from aiogram import Bot, Dispatcher, types
-from handlers import video_photo
+from aiogram.filters import Command
+from fastapi import FastAPI, Request
+from aiogram.types import Update
+from handlers import video_photo  # твой обработчик сообщений
 
+logging.basicConfig(level=logging.INFO)
+
+# Получение токена из Environment Variables
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-VIDEO_THREAD_ID = int(os.getenv("VIDEO_THREAD_ID"))
-PHOTO_THREAD_ID = int(os.getenv("PHOTO_THREAD_ID"))
+if not BOT_TOKEN:
+    raise RuntimeError("BOT_TOKEN не задан! Проверь переменные окружения.")
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
+# Подключаем хэндлеры
+video_photo.register_handlers(dp)
+
 app = FastAPI()
 
-# Главная страница (для проверки deploy)
-@app.get("/")
-async def root():
-    return {"message": "BMX Bot работает!"}
+WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"
+WEBHOOK_URL = f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}{WEBHOOK_PATH}"
 
-# Webhook Telegram
-@app.post(f"/webhook/{BOT_TOKEN}")
+# Endpoint для Telegram webhook
+@app.post(WEBHOOK_PATH)
 async def telegram_webhook(request: Request):
-    data = await request.json()
-    update = types.Update(**data)
+    update = Update(**await request.json())
     await dp.process_update(update)
     return {"ok": True}
 
-# Регистрируем обработчики
-video_photo.register_handlers(dp, bot, VIDEO_THREAD_ID, PHOTO_THREAD_ID)
+# Для проверки, что сервер жив
+@app.get("/")
+async def root():
+    return {"status": "Bot is running!"}
+
+# Если хочешь запускать через uvicorn локально:
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("bmx_bot:app", host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
+
 
