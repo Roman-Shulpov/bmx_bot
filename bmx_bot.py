@@ -1,62 +1,55 @@
-import logging
-from fastapi import FastAPI, Request
+import os
 from aiogram import Bot, Dispatcher, types
+from aiogram.filters import Command
+from fastapi import FastAPI, Request
 from aiogram.types import Update
 
-TOKEN = "7976564635:AAGr4yMj4jDk5Lu6wam9JOfvkSrwHw0eYzg"
-VIDEO_THREAD_ID = 4
-PHOTO_THREAD_ID = 12
+# Берем токен и ссылки из Environment Variables Render
+TOKEN = os.getenv("TOKEN")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+VIDEO_THREAD_ID = int(os.getenv("VIDEO_THREAD_ID"))
+PHOTO_THREAD_ID = int(os.getenv("PHOTO_THREAD_ID"))
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-bot = Bot(token=TOKEN)
+bot = Bot(token=TOKEN, parse_mode="HTML")
 dp = Dispatcher()
-
 app = FastAPI()
 
 
-# --- Проверка содержимого сообщений ---
-def message_contains_image(msg: types.Message) -> bool:
-    if msg.photo:
-        return True
-    if msg.document and msg.document.mime_type and msg.document.mime_type.startswith("image/"):
-        return True
-    return False
-
-def message_contains_video(msg: types.Message) -> bool:
-    if msg.video or msg.video_note or msg.animation:
-        return True
-    if msg.document and msg.document.mime_type and msg.document.mime_type.startswith("video/"):
-        return True
-    return False
+# Команда /start
+@dp.message(Command("start"))
+async def cmd_start(message: types.Message):
+    await message.answer("Бот запущен! Я буду удалять сообщения, если они не подходят по типу.")
 
 
-# --- Фильтрация сообщений ---
+# Проверка сообщений в топиках
 @dp.message()
-async def filter_by_thread(message: types.Message):
+async def check_messages(message: types.Message):
     thread_id = message.message_thread_id
-    if thread_id is None:
+    if thread_id == VIDEO_THREAD_ID and not message.video:
+        await message.delete()
         return
-    try:
-        if thread_id == VIDEO_THREAD_ID and not message_contains_video(message):
-            await message.delete()
-        elif thread_id == PHOTO_THREAD_ID and not message_contains_image(message):
-            await message.delete()
-    except Exception as e:
-        logger.exception("Ошибка при обработке сообщения: %s", e)
+    if thread_id == PHOTO_THREAD_ID and not message.photo:
+        await message.delete()
+        return
 
 
-# --- Webhook endpoint ---
+# Endpoint для webhook
 @app.post(f"/webhook/{TOKEN}")
-async def telegram_webhook(req: Request):
-    data = await req.json()
+async def telegram_webhook(request: Request):
+    data = await request.json()
     update = Update(**data)
-    await dp.feed_update(update)
+    await dp.update.process_update(update)
     return {"ok": True}
 
 
-# --- Корневая страница для проверки ---
+# Главная страница
 @app.get("/")
 async def root():
-    return {"message": "Бот запущен. Для установки webhook перейдите на /set_webhook"}
+    return {"message": "Бот работает. Для установки webhook перейдите на /set_webhook"}
+
+
+# Установка webhook при старте приложения
+@app.on_event("startup")
+async def on_startup():
+    await bot.set_webhook(f"{WEBHOOK_URL}/webhook/{TOKEN}")
+    print("Webhook установлен")
