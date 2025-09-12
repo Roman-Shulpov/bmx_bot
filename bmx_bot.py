@@ -1,44 +1,35 @@
-import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from aiogram import Bot, Dispatcher, types
-from aiogram.webhook.fastapi import SimpleRequestHandler, setup_application
+import asyncio
+import os
 
-# === Твои данные ===
 BOT_TOKEN = "7976564635:AAGr4yMj4jDk5Lu6wam9JOfvkSrwHw0eYzg"
-APP_URL = "https://bmx-bot-hual.onrender.com"
-WEBHOOK_PATH = "/webhook"
-WEBHOOK_URL = f"{APP_URL}{WEBHOOK_PATH}"
+WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"
+WEBHOOK_URL = f"https://bmx-bot-hual.onrender.com{WEBHOOK_PATH}"
 
-# Логирование
-logging.basicConfig(level=logging.INFO)
-
-# Инициализация
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
+
 app = FastAPI()
 
-
-# === Хендлеры ===
+# пример хендлера
 @dp.message()
-async def echo_handler(message: types.Message):
-    await message.answer(f"Привет 👋 Ты написал: {message.text}")
+async def echo(message: types.Message):
+    await message.answer(message.text)
 
+@app.post(WEBHOOK_PATH)
+async def telegram_webhook(request: Request):
+    update = types.Update(**await request.json())
+    await dp.feed_update(update)
+    return {"ok": True}
 
-# === Webhook ===
-SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
-setup_application(app, dp, bot=bot, path=WEBHOOK_PATH)
-
-
-# === Автоматическая настройка вебхука ===
-@app.on_event("startup")
 async def on_startup():
-    logging.info("Устанавливаем вебхук...")
-    await bot.set_webhook(WEBHOOK_URL)
-    logging.info(f"Вебхук установлен: {WEBHOOK_URL}")
-
-
-@app.on_event("shutdown")
-async def on_shutdown():
-    logging.info("Удаляем вебхук...")
     await bot.delete_webhook()
-    logging.info("Вебхук удалён")
+    await bot.set_webhook(WEBHOOK_URL)
+
+async def on_shutdown():
+    await bot.delete_webhook()
+    await bot.session.close()
+
+app.add_event_handler("startup", on_startup)
+app.add_event_handler("shutdown", on_shutdown)
