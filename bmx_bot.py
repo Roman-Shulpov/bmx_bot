@@ -1,12 +1,10 @@
 # bmx_bot.py
 import logging
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+import asyncio
 from aiogram import Bot, Dispatcher, types
-from aiogram.types import Update
 
 TOKEN = "7976564635:AAGr4yMj4jDk5Lu6wam9JOfvkSrwHw0eYzg"
-CHAT_ID = -1002097447
+BOT_CHAT_ID = -1002097447
 VIDEO_THREAD_ID = 4
 PHOTO_THREAD_ID = 12
 
@@ -15,8 +13,6 @@ logger = logging.getLogger(__name__)
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
-
-app = FastAPI()
 
 # --- Проверка содержимого сообщений ---
 def message_contains_image(msg: types.Message) -> bool:
@@ -47,27 +43,18 @@ async def filter_by_thread(message: types.Message):
     except Exception as e:
         logger.exception("Ошибка при обработке сообщения: %s", e)
 
-# --- Webhook endpoint ---
-@app.post(f"/webhook/{TOKEN}")
-async def telegram_webhook(req: Request):
-    data = await req.json()
-    update = Update(**data)
-    await dp.process_update(update)
-    return {"ok": True}
+# --- Эхо-хендлер для текста ---
+@dp.message()
+async def echo(message: types.Message):
+    if message.text:
+        await message.answer(message.text)
 
-# --- Простая страница для проверки ---
-@app.get("/", response_class=HTMLResponse)
-async def index():
-    return "<h2>Бот работает! Telegram Webhook активен.</h2>"
+# --- Запуск long-polling ---
+async def main():
+    try:
+        await dp.start_polling(bot)
+    finally:
+        await bot.session.close()
 
-# --- Установка Webhook при старте ---
-@app.on_event("startup")
-async def on_startup():
-    webhook_url = f"https://bmx-bot-hual.onrender.com/webhook/{TOKEN}"  # <-- твой URL Render
-    await bot.set_webhook(webhook_url)
-    logger.info(f"Webhook установлен: {webhook_url}")
-
-@app.on_event("shutdown")
-async def on_shutdown():
-    await bot.delete_webhook()
-
+if __name__ == "__main__":
+    asyncio.run(main())
