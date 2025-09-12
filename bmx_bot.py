@@ -59,4 +59,4 @@ async def telegram_webhook(req: Request):
 # --- Корневая страница для проверки ---
 @app.get("/")
 async def root():
-    return {"message": "Бот запущен. Для установки webhook перейдите на /set_webhook"}_
+    return {"message": "Бот запущен. Для установки webhook перейдите на /set_webhook"}
