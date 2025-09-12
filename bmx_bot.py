@@ -1,55 +1,50 @@
 import os
-import logging
-from fastapi import FastAPI, Request
+import asyncio
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import ContentType
+from aiogram.filters import Filter
 
-logging.basicConfig(level=logging.INFO)
-
-# Берём токен и URL webhook из Environment Variables
+# Получаем переменные из Environment Variables
 TOKEN = os.getenv("TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-
-# ID топиков (thread_id) для видео и фото
 VIDEO_THREAD_ID = int(os.getenv("VIDEO_THREAD_ID"))  # топик для видео
 PHOTO_THREAD_ID = int(os.getenv("PHOTO_THREAD_ID"))  # топик для фото
 
 bot = Bot(token=TOKEN, parse_mode="HTML")
-dp = Dispatcher(bot)
+dp = Dispatcher()
 
-app = FastAPI()
+# Фильтр для сообщений без видео в видео-топике
+class NoVideoFilter(Filter):
+    async def __call__(self, message: types.Message) -> bool:
+        return message.chat.id == VIDEO_THREAD_ID and not message.video
 
-# --- Хэндлер удаления сообщений ---
-@dp.message_handler()
-async def check_message(message: types.Message):
+# Фильтр для сообщений без фото в фото-топике
+class NoPhotoFilter(Filter):
+    async def __call__(self, message: types.Message) -> bool:
+        return message.chat.id == PHOTO_THREAD_ID and not message.photo
+
+# Хэндлер для удаления сообщений без видео
+@dp.message(NoVideoFilter())
+async def delete_no_video(message: types.Message):
     try:
-        # Удаляем в видео-топике, если нет видео
-        if message.chat.id == VIDEO_THREAD_ID:
-            if not message.video:
-                await message.delete()
-                logging.info(f"Удалено сообщение {message.message_id} без видео")
-        # Удаляем в фото-топике, если нет фото
-        elif message.chat.id == PHOTO_THREAD_ID:
-            if not message.photo:
-                await message.delete()
-                logging.info(f"Удалено сообщение {message.message_id} без фото")
+        await message.delete()
     except Exception as e:
-        logging.error(f"Ошибка при удалении сообщения: {e}")
+        print(f"Ошибка при удалении сообщения: {e}")
 
-# --- FastAPI endpoint для webhook ---
-@app.post(f"/webhook/{TOKEN}")
-async def telegram_webhook(request: Request):
-    update = types.Update(**await request.json())
-    await dp.process_update(update)
-    return {"ok": True}
+# Хэндлер для удаления сообщений без фото
+@dp.message(NoPhotoFilter())
+async def delete_no_photo(message: types.Message):
+    try:
+        await message.delete()
+    except Exception as e:
+        print(f"Ошибка при удалении сообщения: {e}")
 
-@app.get("/")
-async def root():
-    return {"message": "Бот запущен. Чтобы установить webhook, перейдите на /set_webhook"}
+# Запуск бота
+async def main():
+    try:
+        print("Бот запущен...")
+        await dp.start_polling(bot)
+    finally:
+        await bot.session.close()
 
-# --- Установка webhook (один раз) ---
-@app.get("/set_webhook")
-async def set_webhook():
-    webhook_url = f"{WEBHOOK_URL}/webhook/{TOKEN}"
-    await bot.set_webhook(webhook_url)
-    return {"message": f"Webhook установлен: {webhook_url}"}
+if __name__ == "__main__":
+    asyncio.run(main())
