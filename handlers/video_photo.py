@@ -26,24 +26,21 @@
 #                     pass
 #                 return
 # ========================РАБОТАЕТ ВРОДЕ НО НЕ ТАК===========================================
-from aiogram.types import Message
-from aiogram import Bot
 import os
+from aiogram import Dispatcher, types
 
-CHAT_IDS = [
-    int(os.getenv("CHAT_ID_1")),
-    int(os.getenv("CHAT_ID_2"))
-]
 
-async def check_and_delete_message(bot: Bot, message: Message):
-    if message.chat.id not in CHAT_IDS:
+async def filter_messages(message: types.Message):
+    chat_ids = [int(os.getenv("CHAT_ID_1")), int(os.getenv("CHAT_ID_2"))]
+
+    # если сообщение не из разрешённых чатов
+    if message.chat.id not in chat_ids:
         return
 
-    has_photo = bool(message.photo)
-    has_video = bool(message.video or (message.document and message.document.mime_type.startswith("video")))
+    # удаляем всё, что не фото/видео
+    if not (message.photo or message.video):
+        await message.bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
 
-    if not (has_photo or has_video):
-        try:
-            await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
-        except Exception:
-            pass
+
+def register_handlers(dp: Dispatcher):
+    dp.message.register(filter_messages)
