@@ -22,37 +22,40 @@
 
 # ========================РАБОТАЕТ ВРОДЕ НО НЕ ТАК===========================================
 import os
-from fastapi import FastAPI, Request
 from aiogram import Bot, Dispatcher, types
+from fastapi import FastAPI, Request
 from aiogram.types import Update
-from aiogram.utils.exceptions import TelegramAPIError
-from handlers.video_photo import check_message
+from aiogram.dispatcher.webhook import get_new_configured_app
+from handlers.video_photo import check_and_delete_message
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN не задан! Проверь переменные окружения.")
 
-WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"
-WEBHOOK_URL = f"{os.getenv('BASE_URL')}{WEBHOOK_PATH}"
-
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
+
 app = FastAPI()
 
-# Корневой эндпоинт для проверки
+# --- Обработчик любых сообщений ---
+@dp.message()
+async def handle_message(message: types.Message):
+    await check_and_delete_message(bot, message)
+
+# --- Webhook endpoint ---
+@app.post("/webhook/{token}")
+async def webhook_handler(token: str, request: Request):
+    if token != BOT_TOKEN:
+        return {"status": "unauthorized"}
+
+    data = await request.json()
+    update = Update(**data)
+    await dp.update_queue.put(update)
+    return {"status": "ok"}
+
+# --- Для локального теста ---
 @app.get("/")
-async def root():
-    return {"status": "Bot is running!"}
+async def index():
+    return {"status": "Bot is running"}
 
-# Webhook endpoint
-@app.post(WEBHOOK_PATH)
-async def telegram_webhook(update: Request):
-    data = await update.json()
-    update_obj = Update(**data)
-    try:
-        await check_message(bot, update_obj)
-    except TelegramAPIError:
-        pass
-    return {"ok": True}
 
-# Запуск вебхука через set_webhook.py
