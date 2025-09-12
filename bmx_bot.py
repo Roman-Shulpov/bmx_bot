@@ -1,72 +1,56 @@
-import logging
+import os
+import asyncio
 from fastapi import FastAPI, Request
 from aiogram import Bot, Dispatcher, types
-from aiogram.types import Update
-from fastapi import FastAPI
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
-app = FastAPI()
+# === Конфиг ===
+BOT_TOKEN = "7976564635:AAGr4yMj4jDk5Lu6wam9JOfvkSrwHw0eYzg"
+APP_URL = "https://bmx-bot-hual.onrender.com"  # твой Render URL
+WEBHOOK_PATH = "/webhook"
+WEBHOOK_URL = f"{APP_URL}{WEBHOOK_PATH}"
 
-@app.get("/")
-async def root():
-    return {"status": "bot is running"}
-  # bmx_bot.py
-TOKEN = "7976564635:AAGr4yMj4jDk5Lu6wam9JOfvkSrwHw0eYzg"
-CHAT_ID = -1002097447
-VIDEO_THREAD_ID = 4
-PHOTO_THREAD_ID = 12
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-bot = Bot(token=TOKEN)
+bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
-
 app = FastAPI()
 
-# --- Проверка содержимого сообщений ---
-def message_contains_image(msg: types.Message) -> bool:
-    if msg.photo:
-        return True
-    if msg.document and msg.document.mime_type and msg.document.mime_type.startswith("image/"):
-        return True
-    return False
 
-def message_contains_video(msg: types.Message) -> bool:
-    if msg.video or msg.video_note or msg.animation:
-        return True
-    if msg.document and msg.document.mime_type and msg.document.mime_type.startswith("video/"):
-        return True
-    return False
-
-# --- Фильтрация сообщений ---
+# === Хэндлеры бота ===
 @dp.message()
-async def filter_by_thread(message: types.Message):
-    thread_id = message.message_thread_id
-    if thread_id is None:
-        return
-    try:
-        if thread_id == VIDEO_THREAD_ID and not message_contains_video(message):
-            await message.delete()
-        elif thread_id == PHOTO_THREAD_ID and not message_contains_image(message):
-            await message.delete()
-    except Exception as e:
-        logger.exception("Ошибка при обработке сообщения: %s", e)
+async def echo_handler(message: types.Message):
+    await message.answer(f"Ты написал: {message.text}")
 
-# --- Webhook endpoint ---
-@app.post(f"/webhook/{TOKEN}")
-async def telegram_webhook(req: Request):
-    data = await req.json()
-    update = Update(**data)
-    await dp.process_update(update)
-    return {"ok": True}
 
-# --- Установка Webhook при старте ---
+# === Webhook ===
 @app.on_event("startup")
 async def on_startup():
-    webhook_url = f"https://ВАШ_ДОМЕН.render.com/webhook/{TOKEN}"  # <-- вставь URL Render
-    await bot.set_webhook(webhook_url)
-    logger.info(f"Webhook установлен: {webhook_url}")
+    # Убираем старый webhook (на всякий случай)
+    await bot.delete_webhook(drop_pending_updates=True)
+    # Ставим новый
+    await bot.set_webhook(WEBHOOK_URL)
+    print(f"Webhook установлен: {WEBHOOK_URL}")
+
 
 @app.on_event("shutdown")
 async def on_shutdown():
-    await bot.delete_webhook()
+    await bot.session.close()
+
+
+# === Подключаем aiogram к FastAPI ===
+SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
+
+
+# === Запуск локально (polling) ===
+if __name__ == "__main__":
+    import uvicorn
+
+    # Если запускаем локально, то polling
+    async def main():
+        print("Запуск бота в режиме polling...")
+        await dp.start_polling(bot)
+
+    if os.getenv("RENDER") == "true":
+        # Render запускает через uvicorn
+        uvicorn.run("bmx_bot:app", host="0.0.0.0", port=10000, reload=False)
+    else:
+        asyncio.run(main())
