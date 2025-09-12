@@ -26,21 +26,22 @@
 #                     pass
 #                 return
 # ========================РАБОТАЕТ ВРОДЕ НО НЕ ТАК===========================================
+from aiogram import Router, F
+from aiogram.types import Message
+
 import os
-from aiogram import Dispatcher, types
+
+CHAT_ID_1 = int(os.getenv("CHAT_ID_1"))
+CHAT_ID_2 = int(os.getenv("CHAT_ID_2"))
+ALLOWED_CHAT_IDS = {CHAT_ID_1, CHAT_ID_2}
+
+router = Router()
 
 
-async def filter_messages(message: types.Message):
-    chat_ids = [int(os.getenv("CHAT_ID_1")), int(os.getenv("CHAT_ID_2"))]
-
-    # если сообщение не из разрешённых чатов
-    if message.chat.id not in chat_ids:
+@router.message(F.chat.id.in_(ALLOWED_CHAT_IDS))
+async def handle_media(message: Message):
+    # Если есть фото или видео - пропускаем
+    if message.photo or message.video:
         return
-
-    # удаляем всё, что не фото/видео
-    if not (message.photo or message.video):
-        await message.bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
-
-
-def register_handlers(dp: Dispatcher):
-    dp.message.register(filter_messages)
+    # иначе удаляем
+    await message.delete()
