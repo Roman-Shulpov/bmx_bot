@@ -1,56 +1,44 @@
-import os
-import asyncio
-from fastapi import FastAPI, Request
+import logging
+from fastapi import FastAPI
 from aiogram import Bot, Dispatcher, types
-from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+from aiogram.webhook.fastapi import SimpleRequestHandler, setup_application
 
-# === Конфиг ===
+# === Твои данные ===
 BOT_TOKEN = "7976564635:AAGr4yMj4jDk5Lu6wam9JOfvkSrwHw0eYzg"
-APP_URL = "https://bmx-bot-hual.onrender.com"  # твой Render URL
+APP_URL = "https://bmx-bot-hual.onrender.com"
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"{APP_URL}{WEBHOOK_PATH}"
 
+# Логирование
+logging.basicConfig(level=logging.INFO)
+
+# Инициализация
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 app = FastAPI()
 
 
-# === Хэндлеры бота ===
+# === Хендлеры ===
 @dp.message()
 async def echo_handler(message: types.Message):
-    await message.answer(f"Ты написал: {message.text}")
+    await message.answer(f"Привет 👋 Ты написал: {message.text}")
 
 
 # === Webhook ===
+SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
+setup_application(app, dp, bot=bot, path=WEBHOOK_PATH)
+
+
+# === Автоматическая настройка вебхука ===
 @app.on_event("startup")
 async def on_startup():
-    # Убираем старый webhook (на всякий случай)
-    await bot.delete_webhook(drop_pending_updates=True)
-    # Ставим новый
+    logging.info("Устанавливаем вебхук...")
     await bot.set_webhook(WEBHOOK_URL)
-    print(f"Webhook установлен: {WEBHOOK_URL}")
+    logging.info(f"Вебхук установлен: {WEBHOOK_URL}")
 
 
 @app.on_event("shutdown")
 async def on_shutdown():
-    await bot.session.close()
-
-
-# === Подключаем aiogram к FastAPI ===
-SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
-
-
-# === Запуск локально (polling) ===
-if __name__ == "__main__":
-    import uvicorn
-
-    # Если запускаем локально, то polling
-    async def main():
-        print("Запуск бота в режиме polling...")
-        await dp.start_polling(bot)
-
-    if os.getenv("RENDER") == "true":
-        # Render запускает через uvicorn
-        uvicorn.run("bmx_bot:app", host="0.0.0.0", port=10000, reload=False)
-    else:
-        asyncio.run(main())
+    logging.info("Удаляем вебхук...")
+    await bot.delete_webhook()
+    logging.info("Вебхук удалён")
