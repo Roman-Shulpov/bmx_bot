@@ -15,6 +15,7 @@ dp = Dispatcher()
 
 app = FastAPI()
 
+
 # --- Проверка содержимого сообщений ---
 def message_contains_image(msg: types.Message) -> bool:
     if msg.photo:
@@ -30,6 +31,7 @@ def message_contains_video(msg: types.Message) -> bool:
         return True
     return False
 
+
 # --- Фильтрация сообщений ---
 @dp.message()
 async def filter_by_thread(message: types.Message):
@@ -44,32 +46,17 @@ async def filter_by_thread(message: types.Message):
     except Exception as e:
         logger.exception("Ошибка при обработке сообщения: %s", e)
 
+
 # --- Webhook endpoint ---
 @app.post(f"/webhook/{TOKEN}")
 async def telegram_webhook(req: Request):
     data = await req.json()
     update = Update(**data)
-    await dp.feed_update(update)  # <- исправлено
+    await dp.feed_update(update)
     return {"ok": True}
 
-# --- Установка webhook вручную ---
-@app.get("/set_webhook")
-async def set_webhook():
-    webhook_url = f"https://bmx-bot-hual.onrender.com/webhook/{TOKEN}"
-    await bot.set_webhook(webhook_url)
-    return {"ok": True, "message": f"Webhook установлен: {webhook_url}"}
 
 # --- Корневая страница для проверки ---
 @app.get("/")
 async def root():
-    return {"message": "Бот запущен. Перейдите на /set_webhook для установки webhook."}
-
-# --- Логирование старта ---
-@app.on_event("startup")
-async def on_startup():
-    logger.info("Приложение стартовало. Webhook НЕ установлен автоматически. Перейдите /set_webhook один раз.")
-
-@app.on_event("shutdown")
-async def on_shutdown():
-    await bot.delete_webhook()
-    await bot.session.close()
+    return {"message": "Бот запущен. Для установки webhook перейдите на /set_webhook"}_
