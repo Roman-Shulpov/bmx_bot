@@ -4,7 +4,6 @@ import asyncio
 from aiogram import Bot, Dispatcher, types
 
 TOKEN = "7976564635:AAGr4yMj4jDk5Lu6wam9JOfvkSrwHw0eYzg"
-BOT_CHAT_ID = -1002097447
 VIDEO_THREAD_ID = 4
 PHOTO_THREAD_ID = 12
 
@@ -14,7 +13,7 @@ logger = logging.getLogger(__name__)
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# --- Проверка содержимого сообщений ---
+# Проверка изображений
 def message_contains_image(msg: types.Message) -> bool:
     if msg.photo:
         return True
@@ -22,6 +21,7 @@ def message_contains_image(msg: types.Message) -> bool:
         return True
     return False
 
+# Проверка видео
 def message_contains_video(msg: types.Message) -> bool:
     if msg.video or msg.video_note or msg.animation:
         return True
@@ -29,7 +29,7 @@ def message_contains_video(msg: types.Message) -> bool:
         return True
     return False
 
-# --- Фильтрация сообщений ---
+# Фильтрация по топикам
 @dp.message()
 async def filter_by_thread(message: types.Message):
     thread_id = message.message_thread_id
@@ -43,13 +43,13 @@ async def filter_by_thread(message: types.Message):
     except Exception as e:
         logger.exception("Ошибка при обработке сообщения: %s", e)
 
-# --- Эхо-хендлер для текста ---
+# Эхо-хендлер
 @dp.message()
 async def echo(message: types.Message):
     if message.text:
         await message.answer(message.text)
 
-# --- Запуск long-polling ---
+# Запуск long-polling
 async def main():
     try:
         await dp.start_polling(bot)
